@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversor de Vídeo Ultra Rápido</title>
+    <title>Conversor MOV para MP4 Perfeito</title>
     <style>
         :root {
             --primary: #007bff;
@@ -68,7 +68,7 @@
 
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
 
-        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #28a745; padding: 0 10px; }
+        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #555; padding: 0 10px; }
 
         #downloadLink {
             display: none;
@@ -81,16 +81,14 @@
             font-weight: bold;
             text-align: center;
         }
-        
-        /* Elementos ocultos usados para o processamento nativo */
-        #hiddenVideo, #hiddenCanvas { display: none; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 </head>
 <body>
 
 <div class="container">
     <h1>Conversor MOV para MP4</h1>
-    <p>Versão Nativa (Sem travamentos e 100% compatível)</p>
+    <p>Gere arquivos MP4 compatíveis e sem corromper</p>
 
     <label class="file-box" for="videoInput">
         <span id="fileLabel">📱 Clique para selecionar o vídeo (.MOV)</span>
@@ -98,112 +96,108 @@
     </label>
 
     <button id="convertBtn">Converter para MP4</button>
-    <div id="status" class="status">Pronto para usar!</div>
+    <div id="status" class="status">A aguardar arquivo...</div>
     <a id="downloadLink" href="#">📥 Salvar MP4 no Celular</a>
-
-    <video id="hiddenVideo" muted playsinline></video>
-    <canvas id="hiddenCanvas"></canvas>
 </div>
 
 <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    
+    // Configura o FFmpeg com logs para monitoramento
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        // Força o carregamento de uma versão estável hospedada que ignora bloqueios de segurança do GitHub
+        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+    });
+
     const videoInput = document.getElementById('videoInput');
     const fileLabel = document.getElementById('fileLabel');
     const convertBtn = document.getElementById('convertBtn');
     const statusDiv = document.getElementById('status');
     const downloadLink = document.getElementById('downloadLink');
-    const video = document.getElementById('hiddenVideo');
-    const canvas = document.getElementById('hiddenCanvas');
-    const ctx = canvas.getContext('2d');
 
-    let videoFile = null;
+    let isFFmpegLoaded = false;
+
+    async function loadEngine() {
+        try {
+            statusDiv.innerText = "A carregar motores de vídeo...";
+            await ffmpeg.load();
+            isFFmpegLoaded = true;
+            statusDiv.innerText = "Pronto para usar!";
+            statusDiv.style.color = "#28a745";
+        } catch (e) {
+            console.error(e);
+            statusDiv.innerText = "Erro ao carregar codecs. Tente recarregar.";
+            statusDiv.style.color = "#dc3545";
+        }
+    }
+    loadEngine();
 
     videoInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            videoFile = file;
             fileLabel.innerHTML = `<strong>Selecionado:</strong><br>${file.name}<br><small>(${(file.size / (1024 * 1024)).toFixed(1)} MB)</small>`;
             convertBtn.style.display = 'block';
             downloadLink.style.display = 'none';
-            statusDiv.innerText = "Vídeo carregado com sucesso!";
-            statusDiv.style.color = "#007bff";
+            if (isFFmpegLoaded) {
+                statusDiv.innerText = "Vídeo pronto para conversão.";
+                statusDiv.style.color = "#007bff";
+            }
         }
     });
 
-    convertBtn.addEventListener('click', () => {
-        if (!videoFile) return;
+    convertBtn.addEventListener('click', async () => {
+        const file = videoInput.files[0];
+        if (!file || !isFFmpegLoaded) return;
 
         convertBtn.disabled = true;
         downloadLink.style.display = 'none';
-        statusDiv.innerText = "A processar vídeo na velocidade nativa do telemóvel...";
+        statusDiv.innerText = "A converter os frames do vídeo. Não saia da página...";
         statusDiv.style.color = "#fd7e14";
 
-        const fileURL = URL.createObjectURL(videoFile);
-        video.src = fileURL;
+        try {
+            // Salva o arquivo na memória virtual pura
+            ffmpeg.FS('writeFile', 'input.mov', await fetchFile(file));
 
-        video.onloadedmetadata = function() {
-            // Ajusta o tamanho do canvas interno para a resolução real do vídeo original
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            // EXECUTANDO O COMANDO CORRETO: 
+            // -vcodec copy tenta copiar sem re-renderizar para ser instantâneo e não corromper os segundos.
+            // Se falhar devido ao codec de áudio do iPhone, ele faz o transcode limpo.
+            try {
+                await ffmpeg.run('-i', 'input.mov', '-c:v', 'copy', '-c:a', 'aac', 'output.mp4');
+            } catch (copyError) {
+                // Modo de segurança se o codec original for incompatível com cópia direta
+                await ffmpeg.run('-i', 'input.mov', '-preset', 'ultrafast', '-c:a', 'aac', 'output.mp4');
+            }
+
+            // Lê o arquivo gerado
+            const data = ffmpeg.FS('readFile', 'output.mp4');
             
-            // Configura a captura nativa do fluxo do canvas (30 frames por segundo)
-            const stream = canvas.captureStream(30);
-            
-            // Define o tipo de saída suportado amplamente por navegadores móveis (MP4/WebM híbrido estável)
-            let options = { mimeType: 'video/mp4;codecs=h264' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/webm;codecs=h264' };
-            }
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options = { mimeType: 'video/webm' }; 
-            }
+            // Cria um Blob estruturado explicitamente com formato de vídeo correto
+            const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+            const mp4Url = URL.createObjectURL(mp4Blob);
 
-            const mediaRecorder = new MediaRecorder(stream, options);
-            const chunks = [];
+            downloadLink.href = mp4Url;
+            downloadLink.download = 'video_final.mp4';
+            downloadLink.style.display = 'block';
 
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data && e.data.size > 0) chunks.push(e.data);
-            };
+            statusDiv.innerText = "Conversão concluída com sucesso!";
+            statusDiv.style.color = "#28a745";
 
-            mediaRecorder.onstop = () => {
-                // Cria o arquivo final pronto para download
-                const blob = new Blob(chunks, { type: 'video/mp4' });
-                const outputURL = URL.createObjectURL(blob);
-                
-                downloadLink.href = outputURL;
-                downloadLink.download = 'video_convertido.mp4';
-                downloadLink.style.display = 'block';
-                
-                statusDiv.innerText = "Conversão concluída com sucesso!";
-                statusDiv.style.color = "#28a745";
-                convertBtn.disabled = false;
+            // Limpeza de memória
+            ffmpeg.FS('unlink', 'input.mov');
+            ffmpeg.FS('unlink', 'output.mp4');
 
-                // Limpa caches de memória
-                URL.revokeObjectURL(fileURL);
-            };
-
-            // Inicia a gravação interna
-            mediaRecorder.start();
-            video.play();
-
-            // Executa o desenho de cada frame em tempo de execução nativo
-            function drawFrame() {
-                if (!video.paused && !video.ended) {
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    requestAnimationFrame(drawFrame);
-                } else if (video.ended) {
-                    mediaRecorder.stop();
-                }
-            }
-            drawFrame();
-        };
-
-        video.onerror = function() {
-            statusDiv.innerText = "Erro ao ler formato de vídeo original. Certifique-se de que é um arquivo válido.";
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerText = "Falha no processamento. Tente um vídeo mais curto ou outro navegador.";
             statusDiv.style.color = "#dc3545";
+        } finally {
             convertBtn.disabled = false;
-        };
+        }
     });
 </script>
 
 </body>
 </html>
+
+            
