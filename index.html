@@ -48,7 +48,6 @@
             display: block;
         }
 
-        /* Mudado para accept="*/*" para libertar o gestor de ficheiros completo do Android */
         input[type="file"] { display: none; }
 
         video {
@@ -103,7 +102,7 @@
 
     <button id="convertBtn">Iniciar Conversão (Tocar Vídeo)</button>
     <div id="status" class="status"></div>
-    <a id="downloadLink" class="download-btn" href="#">📥 Descarregar MP4</a>
+    <a id="downloadLink" class="download-btn" href="#">📥 Descarregar Vídeo</a>
 </div>
 
 <script>
@@ -126,7 +125,7 @@
             vid.style.display = 'block';
             convertBtn.style.display = 'block';
             downloadLink.style.display = 'none';
-            statusDiv.innerText = "Pronto. Clique no botão abaixo para gravar a conversão.";
+            statusDiv.innerHTML = "Pronto. Clique no botão abaixo para gravar a conversão.";
             statusDiv.style.color = "#007bff";
             recordedChunks = [];
         }
@@ -142,6 +141,7 @@
                 return;
             }
 
+            // Descobre qual o formato que o seu telemóvel suporta gravar nativamente
             let mimeType = 'video/mp4';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
 
@@ -153,16 +153,27 @@
 
             mediaRecorder.onstop = () => {
                 const blob = new Blob(recordedChunks, { type: mimeType });
-                const url = URL.createObjectURL(blob);
                 
-                downloadLink.href = url;
-                downloadLink.download = 'video_convertido.mp4';
-                downloadLink.style.display = 'block';
-                
-                statusDiv.innerText = "✅ Conversão concluída!";
-                statusDiv.style.color = "#28a745";
-                convertBtn.disabled = false;
-                convertBtn.innerText = "Converter Novamente";
+                // Define a extensão correta com base no que o Android gerou (evita o erro de download falhado)
+                const extensao = mimeType.includes('webm') ? 'webm' : 'mp4';
+                const nomeFicheiro = `video_convertido.${extensao}`;
+
+                // TRUQUE ANTI-BLOQUEIO: Usa o FileReader para converter o vídeo para um URL de Dados (Base64)
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onloadend = () => {
+                    downloadLink.href = reader.result;
+                    downloadLink.download = nomeFicheiro;
+                    downloadLink.style.display = 'block';
+                    
+                    statusDiv.innerHTML = `✅ Conversão concluída!<br><small style="color:#666;">Guardado como .${extensao} para garantir compatibilidade.</small>`;
+                    statusDiv.style.color = "#28a745";
+                    convertBtn.disabled = false;
+                    convertBtn.innerText = "Converter Novamente";
+
+                    // Inicia o download automaticamente!
+                    downloadLink.click();
+                };
             };
 
             mediaRecorder.start();
@@ -170,7 +181,7 @@
 
             convertBtn.disabled = true;
             convertBtn.innerText = "A converter...";
-            statusDiv.innerText = "A gravar... Deixe o vídeo reproduzir até ao fim sem fechar a página.";
+            statusDiv.innerText = "A gravar... Deixe o vídeo reproduzir até ao fim.";
             statusDiv.style.color = "#fd7e14";
 
             vid.onended = () => {
@@ -188,3 +199,4 @@
 
 </body>
 </html>
+
