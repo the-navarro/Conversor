@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor MOV para MP4 (Seletor Total)</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --primary-hover: #0056b3;
+            --background: #f4f6f9;
+            --card-bg: #ffffff;
+            --text: #333333;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        h1 { font-size: 22px; margin-bottom: 8px; }
+        p { color: #666; font-size: 14px; margin-bottom: 24px; }
+
+        .file-box {
+            border: 2px dashed #b7bcbf;
+            padding: 25px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            background: #fafafa;
+            margin-bottom: 20px;
+            display: block;
+            transition: all 0.2s;
+        }
+
+        .file-box:hover { border-color: var(--primary); background: #f0f7ff; }
+        input[type="file"] { display: none; }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px;
+            width: 100%;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+        }
+
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+
+        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #555; padding: 0 10px; }
+
+        #downloadLink {
+            display: none;
+            margin-top: 20px;
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+        }
+        #downloadLink:hover { background-color: #218838; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Conversor MOV para MP4</h1>
+    <p>Selecione qualquer arquivo de vídeo do seu celular para converter</p>
+
+    <label class="file-box" for="videoInput">
+        <span id="fileLabel">📱 Clique aqui para buscar o vídeo<br><small style="color:#888;">(Permite buscar em Arquivos, Galeria ou Downloads)</small></span>
+        <input type="file" id="videoInput" accept="*/*">
+    </label>
+
+    <button id="convertBtn">Converter para MP4</button>
+    <div id="status" class="status">Carregando motor de conversão...</div>
+    <a id="downloadLink" href="#">📥 Salvar MP4 no Celular</a>
+</div>
+
+<script type="module">
+    import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/esm/index.js';
+    import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
+
+    const ffmpeg = new FFmpeg();
+    const videoInput = document.getElementById('videoInput');
+    const fileLabel = document.getElementById('fileLabel');
+    const convertBtn = document.getElementById('convertBtn');
+    const statusDiv = document.getElementById('status');
+    const downloadLink = document.getElementById('downloadLink');
+
+    async function loadConversor() {
+        try {
+            statusDiv.innerText = "Configurando ambiente...";
+            const baseURL = 'https://unpkg.com/@ffmpeg/core-st@0.12.4/dist/esm';
+            await ffmpeg.load({
+                coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            });
+            statusDiv.innerText = "Pronto para usar! Escolha seu arquivo.";
+            statusDiv.style.color = "#28a745";
+        } catch (err) {
+            console.error(err);
+            statusDiv.innerText = "Erro ao iniciar conversor. Tente recarregar a página.";
+            statusDiv.style.color = "#dc3545";
+        }
+    }
+    loadConversor();
+
+    videoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            fileLabel.innerHTML = `<strong>Selecionado:</strong><br>${file.name}<br><small>(${(file.size / (1024 * 1024)).toFixed(1)} MB)</small>`;
+            convertBtn.style.display = 'block';
+            downloadLink.style.display = 'none';
+            statusDiv.innerText = "Vídeo carregado. Pronto para converter.";
+            statusDiv.style.color = "#007bff";
+        }
+    });
+
+    convertBtn.addEventListener('click', async () => {
+        const file = videoInput.files[0];
+        if (!file) return;
+
+        convertBtn.disabled = true;
+        downloadLink.style.display = 'none';
+        statusDiv.innerText = "Convertendo... Isso pode demorar um pouco dependendo do tamanho do vídeo. Não feche esta página.";
+        statusDiv.style.color = "#fd7e14";
+
+        try {
+            await ffmpeg.writeFile('input_video', await fetchFile(file));
+
+            // Executa a conversão forçando o formato final MP4 de forma ampla
+            await ffmpeg.exec(['-i', 'input_video', '-vcodec', 'libx264', '-f', 'mp4', 'output.mp4']);
+
+            const data = await ffmpeg.readFile('output.mp4');
+            const dataBlob = new Blob([data.buffer], { type: 'video/mp4' });
+            
+            const url = URL.createObjectURL(dataBlob);
+            downloadLink.href = url;
+            downloadLink.download = 'video_convertido.mp4';
+            downloadLink.style.display = 'block';
+
+            statusDiv.innerText = "Conversão concluída com sucesso!";
+            statusDiv.style.color = "#28a745";
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerText = "Erro na conversão. O arquivo pode ser pesado demais para o navegador do celular.";
+            statusDiv.style.color = "#dc3545";
+        } finally {
+            convertBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
