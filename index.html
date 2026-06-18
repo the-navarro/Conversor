@@ -48,9 +48,9 @@
             display: block;
         }
 
+        /* Mudado para accept="*/*" para libertar o gestor de ficheiros completo do Android */
         input[type="file"] { display: none; }
 
-        /* O vídeo tem de ser visível para o navegador não o bloquear */
         video {
             width: 100%;
             border-radius: 8px;
@@ -92,14 +92,14 @@
 
 <div class="container">
     <h1>Conversor em Tempo Real</h1>
-    <p>Grava o ficheiro nativamente para contornar limites do telemóvel.</p>
+    <p>Escolha o ficheiro a partir de qualquer pasta do seu telemóvel.</p>
 
     <label class="file-box" for="videoInput">
         <span id="fileLabel">📱 Selecionar vídeo (.MOV)</span>
-        <input type="file" id="videoInput" accept="video/*">
+        <input type="file" id="videoInput" accept="*/*">
     </label>
 
-    <video id="vid" playsinline controls></video>
+    <video id="vid" playsinline controls muted></video>
 
     <button id="convertBtn">Iniciar Conversão (Tocar Vídeo)</button>
     <div id="status" class="status"></div>
@@ -122,7 +122,6 @@
         if (file) {
             fileLabel.innerHTML = `<strong>${file.name}</strong><br><small>${(file.size / (1024 * 1024)).toFixed(1)} MB</small>`;
             
-            // Carrega o vídeo no ecrã
             vid.src = URL.createObjectURL(file);
             vid.style.display = 'block';
             convertBtn.style.display = 'block';
@@ -135,7 +134,6 @@
 
     convertBtn.addEventListener('click', () => {
         try {
-            // Captura o fluxo exato do vídeo que está a tocar no ecrã
             const stream = vid.captureStream ? vid.captureStream() : vid.mozCaptureStream();
             
             if (!stream) {
@@ -144,8 +142,6 @@
                 return;
             }
 
-            // O Android Chrome prefere WebM, o Safari prefere MP4. 
-            // O navegador escolhe o melhor e nós forçamos a extensão final para .mp4.
             let mimeType = 'video/mp4';
             if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
 
@@ -169,23 +165,21 @@
                 convertBtn.innerText = "Converter Novamente";
             };
 
-            // Inicia a gravação simultaneamente com o vídeo
             mediaRecorder.start();
             vid.play();
 
             convertBtn.disabled = true;
             convertBtn.innerText = "A converter...";
-            statusDiv.innerText = "A gravar em tempo real. Deixe o vídeo tocar até ao fim!";
+            statusDiv.innerText = "A gravar... Deixe o vídeo reproduzir até ao fim sem fechar a página.";
             statusDiv.style.color = "#fd7e14";
 
-            // Para a gravação automaticamente quando o vídeo acabar
             vid.onended = () => {
                 mediaRecorder.stop();
             };
 
         } catch (error) {
             console.error(error);
-            statusDiv.innerText = "Erro ao iniciar. Certifique-se de que não tem o telemóvel no modo de poupança de energia.";
+            statusDiv.innerText = "Erro ao iniciar conversão.";
             statusDiv.style.color = "red";
             convertBtn.disabled = false;
         }
