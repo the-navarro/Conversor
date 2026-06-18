@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversor MOV para MP4 Perfeito</title>
+    <title>Conversor MOV para MP4 Definitivo</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.7/coi-serviceworker.min.js"></script>
+    
     <style>
         :root {
             --primary: #007bff;
@@ -81,14 +84,15 @@
             font-weight: bold;
             text-align: center;
         }
+        #downloadLink:hover { background-color: #218838; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.11.6/ffmpeg.min.js"></script>
 </head>
 <body>
 
 <div class="container">
     <h1>Conversor MOV para MP4</h1>
-    <p>Gere arquivos MP4 compatíveis e sem corromper</p>
+    <p>Conversão real e estável para o GitHub Pages</p>
 
     <label class="file-box" for="videoInput">
         <span id="fileLabel">📱 Clique para selecionar o vídeo (.MOV)</span>
@@ -96,19 +100,13 @@
     </label>
 
     <button id="convertBtn">Converter para MP4</button>
-    <div id="status" class="status">A aguardar arquivo...</div>
+    <div id="status" class="status">A carregar o motor de conversão...</div>
     <a id="downloadLink" href="#">📥 Salvar MP4 no Celular</a>
 </div>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    
-    // Configura o FFmpeg com logs para monitoramento
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        // Força o carregamento de uma versão estável hospedada que ignora bloqueios de segurança do GitHub
-        corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-    });
+    const ffmpeg = createFFmpeg({ log: true });
 
     const videoInput = document.getElementById('videoInput');
     const fileLabel = document.getElementById('fileLabel');
@@ -116,22 +114,19 @@
     const statusDiv = document.getElementById('status');
     const downloadLink = document.getElementById('downloadLink');
 
-    let isFFmpegLoaded = false;
-
-    async function loadEngine() {
+    // Inicialização do motor com a segurança do coi-serviceworker ativa
+    async function loadConversor() {
         try {
-            statusDiv.innerText = "A carregar motores de vídeo...";
             await ffmpeg.load();
-            isFFmpegLoaded = true;
-            statusDiv.innerText = "Pronto para usar!";
+            statusDiv.innerText = "Pronto para usar! Escolha o seu vídeo.";
             statusDiv.style.color = "#28a745";
-        } catch (e) {
-            console.error(e);
-            statusDiv.innerText = "Erro ao carregar codecs. Tente recarregar.";
+        } catch (err) {
+            console.error(err);
+            statusDiv.innerText = "Erro ao carregar o motor. Recarregue a página.";
             statusDiv.style.color = "#dc3545";
         }
     }
-    loadEngine();
+    loadConversor();
 
     videoInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -139,57 +134,54 @@
             fileLabel.innerHTML = `<strong>Selecionado:</strong><br>${file.name}<br><small>(${(file.size / (1024 * 1024)).toFixed(1)} MB)</small>`;
             convertBtn.style.display = 'block';
             downloadLink.style.display = 'none';
-            if (isFFmpegLoaded) {
-                statusDiv.innerText = "Vídeo pronto para conversão.";
-                statusDiv.style.color = "#007bff";
-            }
+            statusDiv.innerText = "Vídeo carregado. Pronto para converter.";
+            statusDiv.style.color = "#007bff";
         }
     });
 
     convertBtn.addEventListener('click', async () => {
         const file = videoInput.files[0];
-        if (!file || !isFFmpegLoaded) return;
+        if (!file) return;
 
         convertBtn.disabled = true;
         downloadLink.style.display = 'none';
-        statusDiv.innerText = "A converter os frames do vídeo. Não saia da página...";
+        statusDiv.innerText = "A converter... Por favor, aguarde alguns segundos.";
         statusDiv.style.color = "#fd7e14";
 
         try {
-            // Salva o arquivo na memória virtual pura
+            // Escreve o ficheiro na memória do FFmpeg
             ffmpeg.FS('writeFile', 'input.mov', await fetchFile(file));
 
-            // EXECUTANDO O COMANDO CORRETO: 
-            // -vcodec copy tenta copiar sem re-renderizar para ser instantâneo e não corromper os segundos.
-            // Se falhar devido ao codec de áudio do iPhone, ele faz o transcode limpo.
-            try {
-                await ffmpeg.run('-i', 'input.mov', '-c:v', 'copy', '-c:a', 'aac', 'output.mp4');
-            } catch (copyError) {
-                // Modo de segurança se o codec original for incompatível com cópia direta
-                await ffmpeg.run('-i', 'input.mov', '-preset', 'ultrafast', '-c:a', 'aac', 'output.mp4');
-            }
+            // Transcodificação ultra rápida e universal para telemóveis (H.264 + AAC)
+            // Mantém os segundos exatos do vídeo sem quebrar ou crashar
+            await ffmpeg.run(
+                '-i', 'input.mov', 
+                '-c:v', 'libx264', 
+                '-preset', 'ultrafast', 
+                '-crf', '23', 
+                '-c:a', 'aac', 
+                'output.mp4'
+            );
 
-            // Lê o arquivo gerado
+            // Lê o resultado gerado de forma binária
             const data = ffmpeg.FS('readFile', 'output.mp4');
-            
-            // Cria um Blob estruturado explicitamente com formato de vídeo correto
             const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
-            const mp4Url = URL.createObjectURL(mp4Blob);
-
-            downloadLink.href = mp4Url;
-            downloadLink.download = 'video_final.mp4';
+            
+            // Cria a URL de transferência estável
+            const url = URL.createObjectURL(mp4Blob);
+            downloadLink.href = url;
+            downloadLink.download = 'video_convertido.mp4';
             downloadLink.style.display = 'block';
 
             statusDiv.innerText = "Conversão concluída com sucesso!";
             statusDiv.style.color = "#28a745";
 
-            // Limpeza de memória
+            // Limpa a memória virtual para não sobrecarregar o navegador
             ffmpeg.FS('unlink', 'input.mov');
             ffmpeg.FS('unlink', 'output.mp4');
-
         } catch (error) {
             console.error(error);
-            statusDiv.innerText = "Falha no processamento. Tente um vídeo mais curto ou outro navegador.";
+            statusDiv.innerText = "Erro durante o processamento. Tente novamente.";
             statusDiv.style.color = "#dc3545";
         } finally {
             convertBtn.disabled = false;
@@ -200,4 +192,3 @@
 </body>
 </html>
 
-            
