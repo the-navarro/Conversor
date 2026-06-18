@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversor MOV para MP4 (Seletor Total)</title>
+    <title>Conversor MOV para MP4 Estável</title>
     <style>
         :root {
             --primary: #007bff;
@@ -68,7 +68,7 @@
 
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
 
-        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #555; padding: 0 10px; }
+        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #555; padding: 0 10px; word-wrap: break-word; }
 
         #downloadLink {
             display: none;
@@ -81,28 +81,28 @@
             font-weight: bold;
             text-align: center;
         }
-        #downloadLink:hover { background-color: #218838; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>Conversor MOV para MP4</h1>
-    <p>Selecione qualquer arquivo de vídeo do seu celular para converter</p>
+    <p>Versão compatível com GitHub Pages</p>
 
     <label class="file-box" for="videoInput">
-        <span id="fileLabel">📱 Clique aqui para buscar o vídeo<br><small style="color:#888;">(Permite buscar em Arquivos, Galeria ou Downloads)</small></span>
+        <span id="fileLabel">📱 Clique para selecionar o vídeo (.MOV)</span>
         <input type="file" id="videoInput" accept="*/*">
     </label>
 
     <button id="convertBtn">Converter para MP4</button>
-    <div id="status" class="status">Carregando motor de conversão...</div>
+    <div id="status" class="status">Iniciando sistema...</div>
     <a id="downloadLink" href="#">📥 Salvar MP4 no Celular</a>
 </div>
 
 <script type="module">
-    import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/esm/index.js';
-    import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
+    // Utilizando os scripts compilados para compatibilidade sem COOP/COEP (Single-Thread isolado)
+    import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/esm/index.js';
+    import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js';
 
     const ffmpeg = new FFmpeg();
     const videoInput = document.getElementById('videoInput');
@@ -111,23 +111,36 @@
     const statusDiv = document.getElementById('status');
     const downloadLink = document.getElementById('downloadLink');
 
-    async function loadConversor() {
+    async function init() {
         try {
-            statusDiv.innerText = "Configurando ambiente...";
-            const baseURL = 'https://unpkg.com/@ffmpeg/core-st@0.12.4/dist/esm';
+            statusDiv.innerText = "Carregando codecs...";
+            // Força o carregamento de servidores CDN espelhados e estáveis que mitigam erros no GitHub Pages
+            const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.12.4/dist/esm';
             await ffmpeg.load({
                 coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
                 wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
             });
-            statusDiv.innerText = "Pronto para usar! Escolha seu arquivo.";
+            statusDiv.innerText = "Pronto para converter!";
             statusDiv.style.color = "#28a745";
         } catch (err) {
-            console.error(err);
-            statusDiv.innerText = "Erro ao iniciar conversor. Tente recarregar a página.";
-            statusDiv.style.color = "#dc3545";
+            console.error("Erro no carregamento primário:", err);
+            statusDiv.innerText = "Tentando servidor alternativo...";
+            try {
+                // Servidor de contingência caso o jsdelivr falhe no celular
+                const altURL = 'https://unpkg.com/@ffmpeg/core-st@0.12.4/dist/esm';
+                await ffmpeg.load({
+                    coreURL: await toBlobURL(`${altURL}/ffmpeg-core.js`, 'text/javascript'),
+                    wasmURL: await toBlobURL(`${altURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                });
+                statusDiv.innerText = "Pronto para usar (Servidor B)!";
+                statusDiv.style.color = "#28a745";
+            } catch (altErr) {
+                statusDiv.innerText = "Navegador bloqueou os recursos de vídeo. Tente usar o Chrome ou Firefox no celular.";
+                statusDiv.style.color = "#dc3545";
+            }
         }
     }
-    loadConversor();
+    init();
 
     videoInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -135,8 +148,6 @@
             fileLabel.innerHTML = `<strong>Selecionado:</strong><br>${file.name}<br><small>(${(file.size / (1024 * 1024)).toFixed(1)} MB)</small>`;
             convertBtn.style.display = 'block';
             downloadLink.style.display = 'none';
-            statusDiv.innerText = "Vídeo carregado. Pronto para converter.";
-            statusDiv.style.color = "#007bff";
         }
     });
 
@@ -146,14 +157,24 @@
 
         convertBtn.disabled = true;
         downloadLink.style.display = 'none';
-        statusDiv.innerText = "Convertendo... Isso pode demorar um pouco dependendo do tamanho do vídeo. Não feche esta página.";
+        statusDiv.innerText = "Convertendo... Aguarde alguns instantes.";
         statusDiv.style.color = "#fd7e14";
 
         try {
-            await ffmpeg.writeFile('input_video', await fetchFile(file));
+            // Escreve em formato limpo
+            await ffmpeg.writeFile('input.mov', await fetchFile(file));
 
-            // Executa a conversão forçando o formato final MP4 de forma ampla
-            await ffmpeg.exec(['-i', 'input_video', '-vcodec', 'libx264', '-f', 'mp4', 'output.mp4']);
+            // Ajuste fino nos parâmetros do FFmpeg para máxima velocidade e menor consumo de RAM no celular
+            // Força codificação rápida ignorando perfis pesados
+            await ffmpeg.exec([
+                '-i', 'input.mov',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-crf', '28',
+                '-c:a', 'aac',
+                '-strict', 'experimental',
+                'output.mp4'
+            ]);
 
             const data = await ffmpeg.readFile('output.mp4');
             const dataBlob = new Blob([data.buffer], { type: 'video/mp4' });
@@ -163,11 +184,11 @@
             downloadLink.download = 'video_convertido.mp4';
             downloadLink.style.display = 'block';
 
-            statusDiv.innerText = "Conversão concluída com sucesso!";
+            statusDiv.innerText = "Sucesso! Clique abaixo para baixar.";
             statusDiv.style.color = "#28a745";
         } catch (error) {
-            console.error(error);
-            statusDiv.innerText = "Erro na conversão. O arquivo pode ser pesado demais para o navegador do celular.";
+            console.error("Erro na conversão:", error);
+            statusDiv.innerText = "Erro ao processar os frames do vídeo. Tente novamente.";
             statusDiv.style.color = "#dc3545";
         } finally {
             convertBtn.disabled = false;
